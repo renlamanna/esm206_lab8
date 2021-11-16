@@ -1,0 +1,145 @@
+---
+title: "lab 8"
+author: "Renee LaManna"
+date: "11/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(modelsummary)
+library(corrplot)
+library(here)
+library(broom)
+
+```
+
+
+### Read in slo_homes.csv (from gauchosapce) 
+
+```{r}
+homes <- read_csv(here("data", "slo_homes.csv"))
+```
+
+### Create a subset w/ 4 cities
+
+Task: create subset called "homes_subset" that only contains:
+-SLO
+-Atascadero
+-Arroyo Grande
+-Santa Maria-Orcutt
+
+```{r}
+homes_subset<- homes %>%
+  filter(City %in% c("San Luis Obispo", "Atascadero", "Arroyo Grande", "Santa Maria-Orcutt"))
+```
+
+### A little exploration
+Task: create a summary table that has the mean and standard deviation of home prices grouped by city and sale status
+
+in {r, include = FALSE, eval = FALSE} eval means don't even run the code
+
+```{r}
+homes_subset %>%
+  group_by(City, Status) %>%
+  summarize(mean_price=mean(Price),
+                       sd_price= sd(Price),
+                       mean_sqft= mean(SqFt))
+
+```
+
+
+Task: explore the relationship between square footage and home price (from home_subsets) in a scatterplot
+
+```{r}
+ggplot(data = homes_subset, aes(x = SqFt, y = Price)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+  
+```
+-If you see outliers, yours first reaction shoiuld be "what might explain this"
+- once u think about it determine if it is actually in the population or if it is a mistake
+
+
+### Try a few linear models
+
+Use multiple linear regression to investigate relationships between several predictor variables and home price
+
+Create 2 different permuytations of this model:
+
+(1) Price ~ City, Bedrooms, Bathrooms, SqFt, Status (lm1)
+(2) Price ~ City, SqFt, Status (lm2)
+(3) Try another one (lm3)
+
+```{r}
+lm1 <- lm(Price ~ City + Bedrooms + Bathrooms + SqFt + Status, data = homes_subset)
+lm2 <-lm(Price ~ City + SqFt + Status, data = homes_subset)
+lm3 <- lm(Price ~ Bedrooms + SqFt + Bathrooms, data = homes_subset)
+
+# If I wanted San Luis Obispo to be the refernce level
+# Use fct_relevel (in tidyverse pkg) to specify a new reference level
+# First character u give it, will be chosen as reference level
+
+new_homes_subset <- homes_subset %>% 
+  mutate(City = fct_relevel(City, "San Luis Obispo"))
+
+lm_slo <- lm(Price ~ City + SqFt, data = new_homes_subset)
+
+```
+
+How to interpret coefficient of Santa Maria-Orcutt. A home in Santa-Maria would sell for -260860.77 less than a similar home in Arorroy Grande IF everything else stays the same
+
+Are some of the variables we included heavily correlated with eachother?
+Yes, for example Square foot with bedroom or bathroom
+
+R2:
+Almost 54% of variance of home price is explained by variance in  this model. 
+Will never have a actual model that explains 100% of variance
+Telss us with variables that are included that 54% of the variance can be explained
+
+### Explore correlations between quantitative variables
+
+Task: make a subset called homes_quant (starting from homes_subset) thatonly contains the variables from Price through SqFt).
+
+```{r}
+homes_quant <- homes_subset %>% 
+  select(Price:SqFt)
+
+homes_corr <- cor(homes_quant)
+
+corrplot(homes_corr, method = "ellipse")
+```
+
+### Compare AIC values
+Lower AIC is better, indicate a better fit model
+
+```{r}
+AIC(lm1)
+AIC(lm2)
+```
+
+### Use modelsummary() to return multiple model outputs
+
+```{r}
+modelsummary(list(lm1, lm2, lm3))
+```
+
+```{r}
+plot(lm1)
+
+```
+Seeing outliers in Cooks data should align with ones in exploratory phase
+
+### Use broom::augment() to return the predictions for existing observations
+
+```{r}
+home_predictions <-augment(lm1)
+
+# Make a histogram of the resiuduals from this model (lm1)
+
+ggplot(data = home_predictions, (aes(x = .resid))) +
+  geom_histogram()
+```
+
